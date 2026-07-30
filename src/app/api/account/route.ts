@@ -19,7 +19,10 @@ function isAuthorized(request: NextRequest): boolean {
 }
 
 function accountStore() {
-  return getStore(STORE_NAME);
+  // Strong consistency: this store is a single low-traffic record checked on every
+  // page load/login, so we'd rather pay the latency than risk a device seeing a
+  // stale (or just-deleted) account within Blobs' default ~60s propagation window.
+  return getStore(STORE_NAME, { consistency: "strong" });
 }
 
 export async function GET(request: NextRequest) {
