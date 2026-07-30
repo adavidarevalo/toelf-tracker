@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Plan TOEFL — Meta 90 en 17 semanas
 
-## Getting Started
+App de preparación para el TOEFL iBT. Next.js (App Router) + TypeScript + Tailwind CSS v4, 100% del lado del cliente.
 
-First, run the development server:
+## Arrancar
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abre [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Primer uso
+1. Se te pedirá crear una contraseña (mínimo 6 caracteres). A partir de ahí todos tus datos se cifran con AES-256 (PBKDF2 + AES-GCM vía Web Crypto) directamente en tu navegador — nadie puede leer tu calendario, tus puntajes o tus notas sin ella.
+2. **Si olvidas la contraseña, no hay forma de recuperar los datos** (así funciona el cifrado real). Usa **"Exportar respaldo"** de vez en cuando para guardar una copia sin cifrar en un lugar seguro. **"Importar"** la restaura.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Qué incluye
+- **Premio (Semanas 1–8):** progreso hacia ganarte la tablet — constancia (días de estudio marcados en el calendario) + mejora real en el Checkpoint 2 frente a tu diagnóstico.
+- **Calculadora de metas:** entra tu diagnóstico y calcula automáticamente tus metas para las semanas 4, 8, 12 y 16.
+- **Calendario de estudio y ánimo:** marca cada día si estudiaste, cómo te sentiste (1–5) y una nota corta.
+- **Planning semanal:** plan editable por día para cualquier semana.
+- **Las 17 semanas:** el plan completo con lecciones específicas de tus cursos y libros, con checkboxes.
+- **Registro de progreso:** tabla y gráfico de tus puntajes reales en cada checkpoint.
 
-## Learn More
+## Estructura del proyecto
 
-To learn more about Next.js, take a look at the following resources:
+```
+src/
+  app/              # App Router: layout, página raíz, estilos globales
+  components/       # Componentes de UI (todos tipados, sin lógica de negocio)
+  context/          # PlanStore: auth (cifrado/login) + estado de datos de la app
+  lib/              # crypto, fechas, tipos, cálculo de metas/premio/racha (funciones puras)
+  data/             # Contenido del plan (17 semanas, checkpoints) como datos tipados
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+La app se monta solo en el cliente (`next/dynamic` con `ssr: false`) porque todo su estado vive en `localStorage` cifrado — no hay nada que renderizar en el servidor.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Scripts
 
-## Deploy on Vercel
+```bash
+npm run dev     # servidor de desarrollo
+npm run build   # build de producción (incluye chequeo de tipos)
+npm run start   # sirve el build de producción
+npm run lint    # ESLint
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Sobre la nube (Supabase)
+Por ahora todo se guarda **solo en este dispositivo**. Cuando se conecte el MCP de Supabase, se puede migrar este modelo de datos (mismo esquema: `baseline`, `weekDone`, `tracker`, `studyLog`, `weeklyPlan`, ver `src/lib/types.ts`) a tablas reales con Supabase Auth reemplazando el login local — el botón "Exportar respaldo" es el puente para no perder lo ya registrado.

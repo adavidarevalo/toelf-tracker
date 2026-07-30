@@ -1,26 +1,76 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --paper: #f1f4f2;
+  --paper-raised: #ffffff;
+  --ink: #1b2420;
+  --ink-soft: #4b5750;
+  --line: #d7dfda;
+  --accent: #223e63;
+  --accent-contrast: #ffffff;
+  --accent-soft: #c98a46;
+  --reading: #9c7a3c;
+  --listening: #52708c;
+  --speaking: #a85a3e;
+  --writing: #4c7a5e;
+  --shadow-color: 27 36 32;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --paper: #131a1b;
+    --paper-raised: #1b2426;
+    --ink: #e7ede9;
+    --ink-soft: #a9b6af;
+    --line: #2c3639;
+    --accent: #7fa2ce;
+    --accent-contrast: #0b1720;
+    --accent-soft: #e0a868;
+    --reading: #c9a465;
+    --listening: #86a4c9;
+    --speaking: #cc8267;
+    --writing: #7fae8f;
+    --shadow-color: 0 0 0;
   }
 }
 
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-raised: var(--paper-raised);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-contrast: var(--accent-contrast);
+  --color-accent-soft: var(--accent-soft);
+  --color-reading: var(--reading);
+  --color-listening: var(--listening);
+  --color-speaking: var(--speaking);
+  --color-writing: var(--writing);
+  --font-display: var(--font-newsreader), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-geist-sans), -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, Menlo, Consolas, monospace;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  text-wrap: balance;
+}
+
+.tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }
