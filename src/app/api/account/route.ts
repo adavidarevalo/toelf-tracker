@@ -1,21 +1,15 @@
 import { getStore } from "@netlify/blobs";
 import { NextRequest, NextResponse } from "next/server";
 import type { EncryptedBlob } from "@/lib/crypto";
+import { hashSyncCode } from "@/lib/syncCode";
 
 export const dynamic = "force-dynamic";
 
 const STORE_NAME = "toefl-account";
-const RECORD_KEY = "account";
 
 interface AccountRecord {
   salt: string;
   blob: EncryptedBlob;
-}
-
-function isAuthorized(request: NextRequest): boolean {
-  const expected = process.env.NEXT_PUBLIC_SYNC_TOKEN;
-  if (!expected) return false;
-  return request.headers.get("x-sync-token") === expected;
 }
 
 function accountStore() {
@@ -25,10 +19,24 @@ function accountStore() {
   return getStore(STORE_NAME, { consistency: "strong" });
 }
 
+/**
+ * The sync code is generated client-side at signup and never compiled into any bundle —
+ * knowing it is both the account's identity and its authorization (a bearer capability,
+ * the same trust model as an API key). We hash it into the storage key rather than using
+ * it directly, so the raw code isn't what ends up stored as a record name, and one
+ * account's key can't be guessed from another's.
+ */
+async function recordKeyFromRequest(request: NextRequest): Promise<string | null> {
+  const token = request.headers.get("x-sync-token");
+  if (!token || token.length < 8) return null;
+  return hashSyncCode(token);
+}
+
 export async function GET(request: NextRequest) {
-  if (!isAuthorized(request)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const key = await recordKeyFromRequest(request);
+  if (!key) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   try {
-    const record = await accountStore().get(RECORD_KEY, { type: "json" });
+    const record = await accountStore().get(key, { type: "json" });
     return NextResponse.json(record ?? null);
   } catch {
     return NextResponse.json({ error: "blobs-unavailable" }, { status: 503 });
@@ -36,7 +44,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  if (!isAuthorized(request)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const key = await recordKeyFromRequest(request);
+  if (!key) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   let body: AccountRecord;
   try {
     body = (await request.json()) as AccountRecord;
@@ -47,7 +56,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "missing-fields" }, { status: 400 });
   }
   try {
-    await accountStore().setJSON(RECORD_KEY, body);
+    await accountStore().setJSON(key, body);
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "blobs-unavailable" }, { status: 503 });
@@ -55,9 +64,10 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  if (!isAuthorized(request)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const key = await recordKeyFromRequest(request);
+  if (!key) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   try {
-    await accountStore().delete(RECORD_KEY);
+    await accountStore().delete(key);
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "blobs-unavailable" }, { status: 503 });

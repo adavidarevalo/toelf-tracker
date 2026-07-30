@@ -5,6 +5,7 @@ export const ui = {
   btnPrimary:
     "text-sm px-4 py-2 rounded-md border border-accent bg-accent text-accent-contrast hover:opacity-90 transition-opacity cursor-pointer font-medium disabled:opacity-50 disabled:cursor-not-allowed",
   linkDanger: "text-sm text-speaking underline decoration-speaking/40 hover:decoration-speaking cursor-pointer",
+  linkAccent: "text-sm text-accent underline decoration-accent/40 hover:decoration-accent cursor-pointer",
   card: "bg-paper-raised border border-line rounded-xl p-5 sm:p-6 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_4px_14px_rgba(0,0,0,0.05)]",
   input:
     "rounded-md border border-line bg-paper text-ink px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-accent",

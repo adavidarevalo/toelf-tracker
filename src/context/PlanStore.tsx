@@ -13,11 +13,13 @@ import {
   type EncryptedBlob,
 } from "@/lib/crypto";
 import { toISODate } from "@/lib/date";
+import { generateSyncCode, normalizeSyncCode } from "@/lib/syncCode";
 import { createDefaultAppData, mergeWithDefaults, type AppData } from "@/lib/types";
 
 const SALT_KEY = "toefl90:salt";
 const BLOB_KEY = "toefl90:blob";
 const SESSION_KEY = "toefl90:session";
+const SYNC_CODE_KEY = "toefl90:syncCode";
 const SAVE_DEBOUNCE_MS = 400;
 const MIN_PASSWORD_LENGTH = 6;
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // stay unlocked for one day without re-entering the password
@@ -44,6 +46,13 @@ function clearSession() {
  * each browser's localStorage is its own island and a new device thinks no account exists.
  * All failures here are swallowed: without a reachable server, the app just keeps working
  * from the local copy, same as before this feature existed.
+ *
+ * The credential is a random per-account "sync code" generated in the browser at signup
+ * (see lib/syncCode.ts) — never a value baked into the app's build, since anything with a
+ * NEXT_PUBLIC_ prefix ends up readable in the shipped JS by any visitor. Knowing the code
+ * is both proof of ownership and the account's address, the same trust model as an API key;
+ * a second device is linked by typing the code in (see linkDevice below), not by trusting
+ * the deployment itself.
  */
 export type SyncStatus = "unknown" | "synced" | "local-only";
 
@@ -52,12 +61,26 @@ interface RemoteAccount {
   blob: EncryptedBlob;
 }
 
-const SYNC_TOKEN = process.env.NEXT_PUBLIC_SYNC_TOKEN;
+function getStoredSyncCode(): string | null {
+  return localStorage.getItem(SYNC_CODE_KEY);
+}
 
-async function fetchRemoteAccount(): Promise<RemoteAccount | null> {
-  if (!SYNC_TOKEN) return null;
+function setStoredSyncCode(code: string) {
+  localStorage.setItem(SYNC_CODE_KEY, code);
+}
+
+/** Generates and persists a sync code for this account if one doesn't exist yet. */
+function ensureSyncCode(): string {
+  const existing = getStoredSyncCode();
+  if (existing) return existing;
+  const created = generateSyncCode();
+  setStoredSyncCode(created);
+  return created;
+}
+
+async function fetchRemoteAccount(code: string): Promise<RemoteAccount | null> {
   try {
-    const res = await fetch("/api/account", { headers: { "x-sync-token": SYNC_TOKEN }, cache: "no-store" });
+    const res = await fetch("/api/account", { headers: { "x-sync-token": code }, cache: "no-store" });
     if (!res.ok) return null;
     const data = (await res.json()) as RemoteAccount | null;
     return data?.salt && data.blob ? data : null;
@@ -66,12 +89,11 @@ async function fetchRemoteAccount(): Promise<RemoteAccount | null> {
   }
 }
 
-async function pushRemoteAccount(saltB64: string, blob: EncryptedBlob): Promise<boolean> {
-  if (!SYNC_TOKEN) return false;
+async function pushRemoteAccount(code: string, saltB64: string, blob: EncryptedBlob): Promise<boolean> {
   try {
     const res = await fetch("/api/account", {
       method: "PUT",
-      headers: { "Content-Type": "application/json", "x-sync-token": SYNC_TOKEN },
+      headers: { "Content-Type": "application/json", "x-sync-token": code },
       body: JSON.stringify({ salt: saltB64, blob }),
     });
     return res.ok;
@@ -80,10 +102,9 @@ async function pushRemoteAccount(saltB64: string, blob: EncryptedBlob): Promise<
   }
 }
 
-async function deleteRemoteAccount(): Promise<void> {
-  if (!SYNC_TOKEN) return;
+async function deleteRemoteAccount(code: string): Promise<void> {
   try {
-    await fetch("/api/account", { method: "DELETE", headers: { "x-sync-token": SYNC_TOKEN } });
+    await fetch("/api/account", { method: "DELETE", headers: { "x-sync-token": code } });
   } catch {
     // best effort — a local reset shouldn't be blocked by network issues
   }
@@ -92,6 +113,8 @@ async function deleteRemoteAccount(): Promise<void> {
 interface PlanStoreValue {
   status: AuthStatus;
   syncStatus: SyncStatus;
+  syncCode: string | null;
+  linkError: string | null;
   appData: AppData | null;
   error: string | null;
   clearError: () => void;
@@ -100,6 +123,8 @@ interface PlanStoreValue {
   logOut: () => void;
   forgotPassword: () => void;
   changePassword: (current: string, next: string, confirmNext: string) => Promise<void>;
+  linkDevice: (code: string) => Promise<boolean>;
+  clearLinkError: () => void;
   updateAppData: (updater: (draft: AppData) => void) => void;
   exportBackup: () => void;
   importBackup: (file: File) => Promise<void>;
@@ -121,6 +146,8 @@ export function usePlanStore(): PlanStoreValue {
 export function PlanStoreProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("checking");
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("unknown");
+  const [syncCode, setSyncCode] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const [appData, setAppData] = useState<AppData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -131,9 +158,13 @@ export function PlanStoreProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     async function restore() {
-      // The server copy is the source of truth for salt/blob — pull it down first so a
-      // brand-new device sees "enter your password" instead of "create a new account".
-      const remote = await fetchRemoteAccount();
+      const code = getStoredSyncCode();
+      setSyncCode(code);
+
+      // A device that already knows its account's sync code pulls the server copy down
+      // first, so it sees "enter your password" instead of "create a new account" after,
+      // say, reinstalling the browser.
+      const remote = code ? await fetchRemoteAccount(code) : null;
       if (remote) {
         localStorage.setItem(SALT_KEY, remote.salt);
         localStorage.setItem(BLOB_KEY, JSON.stringify(remote.blob));
@@ -161,10 +192,12 @@ export function PlanStoreProvider({ children }: { children: ReactNode }) {
             }
             if (!remote) {
               // This device has an account the server has never seen (e.g. it existed
-              // before sync was added) — seed the shared store from it.
+              // before sync was added) — mint a code for it and seed the shared store.
+              const activeCode = code ?? ensureSyncCode();
+              if (!cancelled) setSyncCode(activeCode);
               const saltB64 = localStorage.getItem(SALT_KEY);
               if (saltB64) {
-                const synced = await pushRemoteAccount(saltB64, JSON.parse(blobRaw) as EncryptedBlob);
+                const synced = await pushRemoteAccount(activeCode, saltB64, JSON.parse(blobRaw) as EncryptedBlob);
                 if (!cancelled) setSyncStatus(synced ? "synced" : "local-only");
               }
             }
@@ -191,7 +224,9 @@ export function PlanStoreProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(BLOB_KEY, JSON.stringify(blob));
     const saltB64 = localStorage.getItem(SALT_KEY);
     if (saltB64) {
-      const synced = await pushRemoteAccount(saltB64, blob);
+      const code = ensureSyncCode();
+      setSyncCode(code);
+      const synced = await pushRemoteAccount(code, saltB64, blob);
       setSyncStatus(synced ? "synced" : "local-only");
     }
   }, []);
@@ -207,6 +242,7 @@ export function PlanStoreProvider({ children }: { children: ReactNode }) {
   );
 
   const clearError = useCallback(() => setError(null), []);
+  const clearLinkError = useCallback(() => setLinkError(null), []);
 
   const signUp = useCallback(async (password: string, confirmPassword: string) => {
     setError(null);
@@ -231,8 +267,9 @@ export function PlanStoreProvider({ children }: { children: ReactNode }) {
 
   const logIn = useCallback(async (password: string) => {
     setError(null);
+    const code = getStoredSyncCode();
     // Pull the latest copy in case another device saved changes since this one last checked.
-    const remote = await fetchRemoteAccount();
+    const remote = code ? await fetchRemoteAccount(code) : null;
     if (remote) {
       localStorage.setItem(SALT_KEY, remote.salt);
       localStorage.setItem(BLOB_KEY, JSON.stringify(remote.blob));
@@ -254,8 +291,10 @@ export function PlanStoreProvider({ children }: { children: ReactNode }) {
       setAppData(mergeWithDefaults(loaded, createDefaultAppData()));
       setStatus("unlocked");
       if (!remote) {
-        // This device has an account the server has never seen — seed the shared store.
-        const synced = await pushRemoteAccount(saltB64, blob);
+        // This device has an account the server has never seen — mint a code and seed it.
+        const activeCode = code ?? ensureSyncCode();
+        setSyncCode(activeCode);
+        const synced = await pushRemoteAccount(activeCode, saltB64, blob);
         setSyncStatus(synced ? "synced" : "local-only");
       }
     } catch {
@@ -271,13 +310,16 @@ export function PlanStoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const forgotPassword = useCallback(() => {
+    const code = getStoredSyncCode();
+    if (code) void deleteRemoteAccount(code);
     localStorage.removeItem(SALT_KEY);
     localStorage.removeItem(BLOB_KEY);
+    localStorage.removeItem(SYNC_CODE_KEY);
     clearSession();
-    void deleteRemoteAccount();
     cryptoKeyRef.current = null;
     setAppData(null);
     setSyncStatus("unknown");
+    setSyncCode(null);
     setStatus("needs-signup");
   }, []);
 
@@ -311,6 +353,28 @@ export function PlanStoreProvider({ children }: { children: ReactNode }) {
     },
     [appData, persistNow]
   );
+
+  /** Pulls an existing account down onto a fresh device using a sync code typed in by the user. */
+  const linkDevice = useCallback(async (rawCode: string): Promise<boolean> => {
+    setLinkError(null);
+    const code = normalizeSyncCode(rawCode);
+    if (code.length < 8) {
+      setLinkError("Ese código no parece válido.");
+      return false;
+    }
+    const remote = await fetchRemoteAccount(code);
+    if (!remote) {
+      setLinkError("No encontramos ninguna cuenta con ese código.");
+      return false;
+    }
+    setStoredSyncCode(code);
+    localStorage.setItem(SALT_KEY, remote.salt);
+    localStorage.setItem(BLOB_KEY, JSON.stringify(remote.blob));
+    setSyncCode(code);
+    setSyncStatus("synced");
+    setStatus("needs-login");
+    return true;
+  }, []);
 
   const updateAppData = useCallback(
     (updater: (draft: AppData) => void) => {
@@ -353,6 +417,8 @@ export function PlanStoreProvider({ children }: { children: ReactNode }) {
     () => ({
       status,
       syncStatus,
+      syncCode,
+      linkError,
       appData,
       error,
       clearError,
@@ -361,6 +427,8 @@ export function PlanStoreProvider({ children }: { children: ReactNode }) {
       logOut,
       forgotPassword,
       changePassword,
+      linkDevice,
+      clearLinkError,
       updateAppData,
       exportBackup,
       importBackup,
@@ -368,6 +436,8 @@ export function PlanStoreProvider({ children }: { children: ReactNode }) {
     [
       status,
       syncStatus,
+      syncCode,
+      linkError,
       appData,
       error,
       clearError,
@@ -376,6 +446,8 @@ export function PlanStoreProvider({ children }: { children: ReactNode }) {
       logOut,
       forgotPassword,
       changePassword,
+      linkDevice,
+      clearLinkError,
       updateAppData,
       exportBackup,
       importBackup,

@@ -6,10 +6,12 @@ import { computeStreak } from "@/lib/scoring";
 import { TOTAL_WEEKS, GOAL_SCORE } from "@/data/plan";
 import { ui } from "@/lib/ui";
 import { ChangePasswordModal } from "@/components/ChangePasswordModal";
+import { SyncCodeModal } from "@/components/SyncCodeModal";
 
 export function TopBar() {
   const { appData, syncStatus, logOut, exportBackup, importBackup } = usePlanStore();
   const [changePwOpen, setChangePwOpen] = useState(false);
+  const [syncCodeOpen, setSyncCodeOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const streak = useMemo(() => (appData ? computeStreak(appData.studyLog) : 0), [appData]);
@@ -68,6 +70,9 @@ export function TopBar() {
             Importar
             <input ref={fileInputRef} type="file" accept="application/json" className="hidden" onChange={handleImportChange} />
           </label>
+          <button className={ui.btnSmall} onClick={() => setSyncCodeOpen(true)}>
+            Sincronización
+          </button>
           <button className={ui.btnSmall} onClick={() => setChangePwOpen(true)}>
             Contraseña
           </button>
@@ -78,6 +83,7 @@ export function TopBar() {
       </div>
 
       <ChangePasswordModal open={changePwOpen} onClose={() => setChangePwOpen(false)} />
+      <SyncCodeModal open={syncCodeOpen} onClose={() => setSyncCodeOpen(false)} />
     </div>
   );
 }

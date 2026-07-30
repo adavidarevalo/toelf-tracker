@@ -5,12 +5,17 @@ import { usePlanStore } from "@/context/PlanStore";
 import { ui } from "@/lib/ui";
 
 export function LockScreen() {
-  const { status, error, clearError, signUp, logIn, forgotPassword } = usePlanStore();
+  const { status, error, clearError, signUp, logIn, forgotPassword, linkError, clearLinkError, linkDevice } =
+    usePlanStore();
   const isSignup = status === "needs-signup";
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const [linking, setLinking] = useState(false);
+  const [linkCode, setLinkCode] = useState("");
+  const [linkSubmitting, setLinkSubmitting] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -23,6 +28,20 @@ export function LockScreen() {
       }
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleLinkSubmit(e: FormEvent) {
+    e.preventDefault();
+    setLinkSubmitting(true);
+    try {
+      const ok = await linkDevice(linkCode);
+      if (ok) {
+        setLinking(false);
+        setLinkCode("");
+      }
+    } finally {
+      setLinkSubmitting(false);
     }
   }
 
@@ -102,6 +121,53 @@ export function LockScreen() {
             </button>
           )}
         </form>
+
+        {isSignup && !linking && (
+          <button type="button" onClick={() => setLinking(true)} className={`${ui.linkAccent} text-left mt-3.5 block`}>
+            ¿Ya tienes cuenta en otro dispositivo?
+          </button>
+        )}
+
+        {isSignup && linking && (
+          <form onSubmit={handleLinkSubmit} className="mt-4 pt-4 border-t border-line flex flex-col gap-3">
+            <div>
+              <label htmlFor="link-code" className={ui.label}>
+                Código de sincronización
+              </label>
+              <input
+                id="link-code"
+                type="text"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                placeholder="XXXX-XXXX-XXXX-XXXX"
+                required
+                value={linkCode}
+                onChange={(e) => {
+                  setLinkCode(e.target.value);
+                  if (linkError) clearLinkError();
+                }}
+                className={`${ui.input} mt-1 uppercase`}
+              />
+            </div>
+            <div className="text-sm text-speaking min-h-[1.2em]">{linkError}</div>
+            <div className="flex gap-2">
+              <button type="submit" disabled={linkSubmitting} className={ui.btnPrimary}>
+                Vincular dispositivo
+              </button>
+              <button
+                type="button"
+                className={ui.btn}
+                onClick={() => {
+                  setLinking(false);
+                  setLinkCode("");
+                  clearLinkError();
+                }}
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+        )}
 
         <p className="text-xs text-ink-soft mt-4 leading-relaxed">
           Tus datos (calendario, planes, puntajes) se cifran en este dispositivo con AES-256 a partir de tu
