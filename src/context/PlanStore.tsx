@@ -159,6 +159,15 @@ export function PlanStoreProvider({ children }: { children: ReactNode }) {
               setAppData(mergeWithDefaults(loaded, createDefaultAppData()));
               setStatus("unlocked");
             }
+            if (!remote) {
+              // This device has an account the server has never seen (e.g. it existed
+              // before sync was added) — seed the shared store from it.
+              const saltB64 = localStorage.getItem(SALT_KEY);
+              if (saltB64) {
+                const synced = await pushRemoteAccount(saltB64, JSON.parse(blobRaw) as EncryptedBlob);
+                if (!cancelled) setSyncStatus(synced ? "synced" : "local-only");
+              }
+            }
             return;
           }
         } catch {
@@ -244,6 +253,11 @@ export function PlanStoreProvider({ children }: { children: ReactNode }) {
       await saveSession(key);
       setAppData(mergeWithDefaults(loaded, createDefaultAppData()));
       setStatus("unlocked");
+      if (!remote) {
+        // This device has an account the server has never seen — seed the shared store.
+        const synced = await pushRemoteAccount(saltB64, blob);
+        setSyncStatus(synced ? "synced" : "local-only");
+      }
     } catch {
       setError("Contraseña incorrecta.");
     }
