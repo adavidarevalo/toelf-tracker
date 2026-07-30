@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { usePlanStore } from "@/context/PlanStore";
-import { PHASES } from "@/data/plan";
+import { PHASES, RESOURCE_SOURCE_LABELS } from "@/data/plan";
 import type { WeekEntry } from "@/data/plan";
 import { skillBorderClass, skillTextClass, ui } from "@/lib/ui";
 
@@ -15,12 +15,7 @@ const SKILL_LABELS: Record<string, string> = {
   mix: "Mixto",
 };
 
-function resourceItems(resource: string): string[] {
-  return resource
-    .split(/\s*[;+]\s*/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
+const SELF_DIRECTED_LABEL = "Material propio";
 
 export function PhaseSection() {
   const { appData, updateAppData } = usePlanStore();
@@ -94,8 +89,6 @@ function WeekAccordionRow({
   onToggleExpand: () => void;
   onToggleDone: (done: boolean) => void;
 }) {
-  const items = resourceItems(week.resource);
-
   return (
     <div className="border-t border-line">
       <button
@@ -139,9 +132,14 @@ function WeekAccordionRow({
           </div>
           <div>
             <div className="text-[0.66rem] uppercase tracking-wide text-ink-soft font-semibold mb-1.5">Recursos a usar</div>
-            <ul className="list-disc pl-4 space-y-1 text-sm text-ink-soft">
-              {items.map((item, i) => (
-                <li key={i}>{item}</li>
+            <ul className="flex flex-col gap-2.5">
+              {week.resources.map((item, i) => (
+                <li key={i} className="flex flex-col gap-0.5">
+                  <span className="inline-block w-fit text-[0.62rem] uppercase tracking-wide font-semibold text-accent-soft bg-accent-soft/10 border border-accent-soft/30 rounded-full px-2 py-0.5">
+                    {item.source ? RESOURCE_SOURCE_LABELS[item.source] : SELF_DIRECTED_LABEL}
+                  </span>
+                  <span className="text-sm text-ink-soft">{item.detail}</span>
+                </li>
               ))}
             </ul>
           </div>

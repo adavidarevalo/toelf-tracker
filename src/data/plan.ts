@@ -2,11 +2,26 @@ import type { CheckpointId, DayCode } from "@/lib/types";
 
 export type WeekSkill = "r" | "l" | "s" | "w" | "g" | "mix";
 
+/** The specific book or course a resource item comes from — `null` means self-directed review. */
+export type ResourceSource = "libro1" | "libro2" | "curso-modular" | "curso-emergencia" | null;
+
+export const RESOURCE_SOURCE_LABELS: Record<Exclude<ResourceSource, null>, string> = {
+  libro1: "TOEFL iBT Preparation Book 2025–2026",
+  libro2: "The Official Guide to the TOEFL iBT Test, 7th Ed.",
+  "curso-modular": "New TOEFL iBT 2026 Enhanced: Modular System",
+  "curso-emergencia": "Emergency Course for the TOEFL (2026)",
+};
+
+export interface WeekResource {
+  source: ResourceSource;
+  detail: string;
+}
+
 export interface WeekEntry {
   week: number;
   skill: WeekSkill;
   focus: string;
-  resource: string;
+  resources: WeekResource[];
   hours: string;
 }
 
@@ -30,32 +45,42 @@ export const PHASES: Phase[] = [
         week: 1,
         skill: "mix",
         focus: "Diagnóstico completo",
-        resource:
-          'Libro 1 — Test completo 1 (una sección/día) + Curso Modular: "Quick overview" de cada sección',
+        resources: [
+          { source: "libro1", detail: "Test completo 1 (una sección/día)" },
+          { source: "curso-modular", detail: '"Quick overview" de cada sección' },
+        ],
         hours: "~7h",
       },
       {
         week: 2,
         skill: "r",
         focus: "Reading — vocabulario en contexto",
-        resource:
-          'Curso Modular: "Complete the words" overview + Timed practice 1–3; "Read in daily life" overview + práctica 1–2',
+        resources: [
+          { source: "curso-modular", detail: '"Complete the words" overview + Timed practice 1–3' },
+          { source: "curso-modular", detail: '"Read in daily life" overview + práctica 1–2' },
+        ],
         hours: "6h",
       },
       {
         week: 3,
         skill: "r",
         focus: "Reading — textos académicos",
-        resource:
-          "Curso Modular: Academic reading strategies (first + detailed reading) + Sample 1–2 + Timed practice 1 (Microplastics)",
+        resources: [
+          {
+            source: "curso-modular",
+            detail: "Academic reading strategies (first + detailed reading) + Sample 1–2 + Timed practice 1 (Microplastics)",
+          },
+        ],
         hours: "6h",
       },
       {
         week: 4,
         skill: "g",
         focus: "Gramática base + Checkpoint 1",
-        resource:
-          "Curso Modular: Basic sentence/question structure, Adjective Clauses Parte 1–2 + repetir Reading del Libro 1 Test 2",
+        resources: [
+          { source: "curso-modular", detail: "Basic sentence/question structure, Adjective Clauses Parte 1–2" },
+          { source: "libro1", detail: "Repetir Reading del Test 2 (checkpoint)" },
+        ],
         hours: "6h",
       },
     ],
@@ -71,31 +96,39 @@ export const PHASES: Phase[] = [
         week: 5,
         skill: "l",
         focus: "Listening — respuestas cortas",
-        resource: 'Curso Modular: "Listen and choose a response" overview + Practice tests 1–4',
+        resources: [{ source: "curso-modular", detail: '"Listen and choose a response" overview + Practice tests 1–4' }],
         hours: "6h",
       },
       {
         week: 6,
         skill: "l",
         focus: "Listening — conversación y anuncios",
-        resource:
-          'Curso Modular: "Listen to a conversation" (overview + práctica 1–2), "Listen to an announcement" (overview + práctica 1)',
+        resources: [
+          {
+            source: "curso-modular",
+            detail: '"Listen to a conversation" (overview + práctica 1–2), "Listen to an announcement" (overview + práctica 1)',
+          },
+        ],
         hours: "6h",
       },
       {
         week: 7,
         skill: "g",
         focus: "Listening académico + Gramática",
-        resource:
-          'Curso Modular: "Listen to an academic talk" overview + Lecture práctica 1–2; Noun clauses Parte 1–2',
+        resources: [
+          { source: "curso-modular", detail: '"Listen to an academic talk" overview + Lecture práctica 1–2' },
+          { source: "curso-modular", detail: "Noun clauses Parte 1–2" },
+        ],
         hours: "7h",
       },
       {
         week: 8,
         skill: "w",
         focus: "Writing base + Checkpoint 2",
-        resource:
-          'Curso Modular: "Build a sentence" + "Write an email" (overview, estrategias, práctica 1–2) + Checkpoint: Listening y Writing del Libro 1 Test 2',
+        resources: [
+          { source: "curso-modular", detail: '"Build a sentence" + "Write an email" (overview, estrategias, práctica 1–2)' },
+          { source: "libro1", detail: "Checkpoint: Listening y Writing del Test 2" },
+        ],
         hours: "7h",
       },
     ],
@@ -111,29 +144,34 @@ export const PHASES: Phase[] = [
         week: 9,
         skill: "w",
         focus: "Writing — discusión académica",
-        resource: 'Curso Modular: "Write for academic discussion" overview + Timed practice 1–2',
+        resources: [{ source: "curso-modular", detail: '"Write for academic discussion" overview + Timed practice 1–2' }],
         hours: "6h",
       },
       {
         week: 10,
         skill: "s",
         focus: "Speaking — listen and repeat",
-        resource: 'Curso Modular: "Listen and repeat" overview + Timed practice 1–3',
+        resources: [{ source: "curso-modular", detail: '"Listen and repeat" overview + Timed practice 1–3' }],
         hours: "6h",
       },
       {
         week: 11,
         skill: "s",
         focus: "Speaking — entrevista",
-        resource: 'Curso Modular: "Take an interview" overview + estrategias + Timed practice 1–2',
+        resources: [{ source: "curso-modular", detail: '"Take an interview" overview + estrategias + Timed practice 1–2' }],
         hours: "6h",
       },
       {
         week: 12,
         skill: "g",
         focus: "Gramática avanzada + Checkpoint 3",
-        resource:
-          "Curso Modular: If Type 0/1/2/3, Linkers (tiempo/razón/resultado/propósito/contraste) + grabar y autoevaluar Speaking/Writing del Libro 1",
+        resources: [
+          {
+            source: "curso-modular",
+            detail: "If Type 0/1/2/3, Linkers (tiempo/razón/resultado/propósito/contraste)",
+          },
+          { source: "libro1", detail: "Grabar y autoevaluar Speaking/Writing con la rúbrica oficial" },
+        ],
         hours: "7h",
       },
     ],
@@ -148,37 +186,44 @@ export const PHASES: Phase[] = [
         week: 13,
         skill: "mix",
         focus: "Simulacro completo 1",
-        resource: "Libro 1 — Test completo 2, las 4 secciones cronometradas",
+        resources: [{ source: "libro1", detail: "Test completo 2, las 4 secciones cronometradas" }],
         hours: "7h",
       },
       {
         week: 14,
         skill: "mix",
         focus: "Refuerzo de tu sección más débil",
-        resource:
-          'Curso Emergencia — lecciones "Tips and tricks" de esa sección + reducción de cláusulas si la gramática aún falla',
+        resources: [
+          { source: "curso-emergencia", detail: 'Lecciones "Tips and tricks" de esa sección' },
+          { source: "curso-modular", detail: "Reducción de cláusulas (Adjective Clauses) si la gramática aún falla" },
+        ],
         hours: "6h",
       },
       {
         week: 15,
         skill: "mix",
         focus: "Simulacro con material oficial 1",
-        resource: "Libro 2 (Official Guide, ETS) — Test completo 1, cronometrado",
+        resources: [{ source: "libro2", detail: "Test completo 1 (Capítulo 6), cronometrado" }],
         hours: "6h",
       },
       {
         week: 16,
         skill: "mix",
         focus: "Simulacro con material oficial 2",
-        resource: 'Libro 2 — Test completo 2 + Curso Emergencia "Complete TOEFL Test" (1h17)',
+        resources: [
+          { source: "libro2", detail: "Test completo 2 (Capítulo 7)" },
+          { source: "curso-emergencia", detail: '"Complete TOEFL Test" (1h17)' },
+        ],
         hours: "6h",
       },
       {
         week: 17,
         skill: "mix",
         focus: "Repaso final y logística",
-        resource:
-          "Vocabulario y plantillas propias, descanso activo, revisar reglas del examen; medio simulacro opcional",
+        resources: [
+          { source: null, detail: "Vocabulario y plantillas propias, descanso activo, revisar reglas del examen" },
+          { source: null, detail: "Medio simulacro opcional con material que aún no hayas usado" },
+        ],
         hours: "4h",
       },
     ],
