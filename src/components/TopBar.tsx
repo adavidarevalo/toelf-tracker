@@ -8,7 +8,7 @@ import { ui } from "@/lib/ui";
 import { ChangePasswordModal } from "@/components/ChangePasswordModal";
 
 export function TopBar() {
-  const { appData, logOut, exportBackup, importBackup } = usePlanStore();
+  const { appData, syncStatus, logOut, exportBackup, importBackup } = usePlanStore();
   const [changePwOpen, setChangePwOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -52,7 +52,15 @@ export function TopBar() {
           </div>
         </div>
 
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
+          {syncStatus === "local-only" && (
+            <span
+              className="text-[0.68rem] text-speaking border border-speaking/40 rounded-full px-2.5 py-1"
+              title="No se pudo sincronizar con el servidor — tus cambios solo están guardados en este dispositivo por ahora."
+            >
+              Solo en este dispositivo
+            </span>
+          )}
           <button className={ui.btnSmall} onClick={exportBackup}>
             Exportar respaldo
           </button>

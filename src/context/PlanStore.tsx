@@ -38,8 +38,60 @@ function clearSession() {
   localStorage.removeItem(SESSION_KEY);
 }
 
+/**
+ * The salt + encrypted blob are also synced to a shared server-side store (see
+ * src/app/api/account/route.ts) so the same account works from any device — otherwise
+ * each browser's localStorage is its own island and a new device thinks no account exists.
+ * All failures here are swallowed: without a reachable server, the app just keeps working
+ * from the local copy, same as before this feature existed.
+ */
+export type SyncStatus = "unknown" | "synced" | "local-only";
+
+interface RemoteAccount {
+  salt: string;
+  blob: EncryptedBlob;
+}
+
+const SYNC_TOKEN = process.env.NEXT_PUBLIC_SYNC_TOKEN;
+
+async function fetchRemoteAccount(): Promise<RemoteAccount | null> {
+  if (!SYNC_TOKEN) return null;
+  try {
+    const res = await fetch("/api/account", { headers: { "x-sync-token": SYNC_TOKEN }, cache: "no-store" });
+    if (!res.ok) return null;
+    const data = (await res.json()) as RemoteAccount | null;
+    return data?.salt && data.blob ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+async function pushRemoteAccount(saltB64: string, blob: EncryptedBlob): Promise<boolean> {
+  if (!SYNC_TOKEN) return false;
+  try {
+    const res = await fetch("/api/account", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-sync-token": SYNC_TOKEN },
+      body: JSON.stringify({ salt: saltB64, blob }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function deleteRemoteAccount(): Promise<void> {
+  if (!SYNC_TOKEN) return;
+  try {
+    await fetch("/api/account", { method: "DELETE", headers: { "x-sync-token": SYNC_TOKEN } });
+  } catch {
+    // best effort — a local reset shouldn't be blocked by network issues
+  }
+}
+
 interface PlanStoreValue {
   status: AuthStatus;
+  syncStatus: SyncStatus;
   appData: AppData | null;
   error: string | null;
   clearError: () => void;
@@ -68,6 +120,7 @@ export function usePlanStore(): PlanStoreValue {
  */
 export function PlanStoreProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("checking");
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("unknown");
   const [appData, setAppData] = useState<AppData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,6 +131,16 @@ export function PlanStoreProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     async function restore() {
+      // The server copy is the source of truth for salt/blob — pull it down first so a
+      // brand-new device sees "enter your password" instead of "create a new account".
+      const remote = await fetchRemoteAccount();
+      if (remote) {
+        localStorage.setItem(SALT_KEY, remote.salt);
+        localStorage.setItem(BLOB_KEY, JSON.stringify(remote.blob));
+      }
+      if (cancelled) return;
+      setSyncStatus(remote ? "synced" : "local-only");
+
       const blobRaw = localStorage.getItem(BLOB_KEY);
       if (!blobRaw) {
         if (!cancelled) setStatus("needs-signup");
@@ -117,6 +180,11 @@ export function PlanStoreProvider({ children }: { children: ReactNode }) {
     if (!cryptoKeyRef.current) return;
     const blob = await encryptJSON(cryptoKeyRef.current, data);
     localStorage.setItem(BLOB_KEY, JSON.stringify(blob));
+    const saltB64 = localStorage.getItem(SALT_KEY);
+    if (saltB64) {
+      const synced = await pushRemoteAccount(saltB64, blob);
+      setSyncStatus(synced ? "synced" : "local-only");
+    }
   }, []);
 
   const scheduleSave = useCallback(
@@ -154,6 +222,14 @@ export function PlanStoreProvider({ children }: { children: ReactNode }) {
 
   const logIn = useCallback(async (password: string) => {
     setError(null);
+    // Pull the latest copy in case another device saved changes since this one last checked.
+    const remote = await fetchRemoteAccount();
+    if (remote) {
+      localStorage.setItem(SALT_KEY, remote.salt);
+      localStorage.setItem(BLOB_KEY, JSON.stringify(remote.blob));
+    }
+    setSyncStatus(remote ? "synced" : "local-only");
+
     const saltB64 = localStorage.getItem(SALT_KEY);
     const blobRaw = localStorage.getItem(BLOB_KEY);
     if (!saltB64 || !blobRaw) {
@@ -184,8 +260,10 @@ export function PlanStoreProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(SALT_KEY);
     localStorage.removeItem(BLOB_KEY);
     clearSession();
+    void deleteRemoteAccount();
     cryptoKeyRef.current = null;
     setAppData(null);
+    setSyncStatus("unknown");
     setStatus("needs-signup");
   }, []);
 
@@ -260,6 +338,7 @@ export function PlanStoreProvider({ children }: { children: ReactNode }) {
   const value = useMemo<PlanStoreValue>(
     () => ({
       status,
+      syncStatus,
       appData,
       error,
       clearError,
@@ -274,6 +353,7 @@ export function PlanStoreProvider({ children }: { children: ReactNode }) {
     }),
     [
       status,
+      syncStatus,
       appData,
       error,
       clearError,
