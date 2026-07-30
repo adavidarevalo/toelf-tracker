@@ -1,11 +1,31 @@
 "use client";
 
+import { useState } from "react";
 import { usePlanStore } from "@/context/PlanStore";
 import { PHASES } from "@/data/plan";
-import { skillBorderClass, ui } from "@/lib/ui";
+import type { WeekEntry } from "@/data/plan";
+import { skillBorderClass, skillTextClass, ui } from "@/lib/ui";
+
+const SKILL_LABELS: Record<string, string> = {
+  r: "Reading",
+  l: "Listening",
+  s: "Speaking",
+  w: "Writing",
+  g: "Gramática",
+  mix: "Mixto",
+};
+
+function resourceItems(resource: string): string[] {
+  return resource
+    .split(/\s*[;+]\s*/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
 
 export function PhaseSection() {
   const { appData, updateAppData } = usePlanStore();
+  const [expandedWeeks, setExpandedWeeks] = useState<Set<number>>(new Set());
+
   if (!appData) return null;
 
   function toggleWeek(week: number, done: boolean) {
@@ -14,11 +34,20 @@ export function PhaseSection() {
     });
   }
 
+  function toggleExpanded(week: number) {
+    setExpandedWeeks((prev) => {
+      const next = new Set(prev);
+      if (next.has(week)) next.delete(week);
+      else next.add(week);
+      return next;
+    });
+  }
+
   return (
     <section id="phases">
       <div className={ui.sectionHead}>
         <h2 className={ui.sectionTitle}>5. Las 17 semanas</h2>
-        <span className="text-ink-soft text-sm">Marca cada semana al terminarla</span>
+        <span className="text-ink-soft text-sm">Toca una semana para ver su plan y recursos</span>
       </div>
 
       {PHASES.map((phase) => (
@@ -34,62 +63,90 @@ export function PhaseSection() {
           </div>
           <p className="px-5 pt-3 text-ink-soft text-sm">{phase.description}</p>
 
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse mt-2">
-              <thead>
-                <tr>
-                  {["Semana", "Enfoque", "Recurso", "Horas", "✓"].map((h) => (
-                    <th
-                      key={h}
-                      className="text-left text-[0.66rem] uppercase tracking-wide text-ink-soft px-5 pt-2.5 pb-1.5 font-semibold"
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {phase.weeks.map((w, idx) => (
-                  <tr key={w.week}>
-                    <td
-                      className={`tabular text-ink-soft whitespace-nowrap px-5 py-2.5 border-t border-line text-sm ${
-                        idx === phase.weeks.length - 1 ? "pb-4" : ""
-                      }`}
-                    >
-                      {w.week}
-                    </td>
-                    <td
-                      className={`font-semibold px-5 py-2.5 border-t border-line text-sm border-l-[3px] ${skillBorderClass(
-                        w.skill
-                      )} ${idx === phase.weeks.length - 1 ? "pb-4" : ""}`}
-                    >
-                      {w.focus}
-                    </td>
-                    <td className={`px-5 py-2.5 border-t border-line text-sm ${idx === phase.weeks.length - 1 ? "pb-4" : ""}`}>
-                      {w.resource}
-                    </td>
-                    <td
-                      className={`tabular text-ink-soft whitespace-nowrap px-5 py-2.5 border-t border-line text-sm ${
-                        idx === phase.weeks.length - 1 ? "pb-4" : ""
-                      }`}
-                    >
-                      {w.hours}
-                    </td>
-                    <td className={`text-center px-5 py-2.5 border-t border-line ${idx === phase.weeks.length - 1 ? "pb-4" : ""}`}>
-                      <input
-                        type="checkbox"
-                        checked={!!appData.weekDone[w.week]}
-                        onChange={(e) => toggleWeek(w.week, e.target.checked)}
-                        className="w-[17px] h-[17px] accent-accent cursor-pointer"
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mt-2">
+            {phase.weeks.map((w) => (
+              <WeekAccordionRow
+                key={w.week}
+                week={w}
+                done={!!appData.weekDone[w.week]}
+                expanded={expandedWeeks.has(w.week)}
+                onToggleExpand={() => toggleExpanded(w.week)}
+                onToggleDone={(done) => toggleWeek(w.week, done)}
+              />
+            ))}
           </div>
         </div>
       ))}
     </section>
+  );
+}
+
+function WeekAccordionRow({
+  week,
+  done,
+  expanded,
+  onToggleExpand,
+  onToggleDone,
+}: {
+  week: WeekEntry;
+  done: boolean;
+  expanded: boolean;
+  onToggleExpand: () => void;
+  onToggleDone: (done: boolean) => void;
+}) {
+  const items = resourceItems(week.resource);
+
+  return (
+    <div className="border-t border-line">
+      <button
+        type="button"
+        onClick={onToggleExpand}
+        aria-expanded={expanded}
+        className={`w-full flex items-center gap-3 px-5 py-2.5 text-left hover:bg-paper/60 transition-colors border-l-[3px] ${skillBorderClass(
+          week.skill
+        )}`}
+      >
+        <span className="tabular text-ink-soft text-sm w-6 shrink-0">{week.week}</span>
+        <span className="flex-1 font-semibold text-sm truncate">{week.focus}</span>
+        <span className="tabular text-ink-soft text-xs whitespace-nowrap hidden sm:inline">{week.hours}</span>
+        <span onClick={(e) => e.stopPropagation()} className="shrink-0">
+          <input
+            type="checkbox"
+            checked={done}
+            onChange={(e) => onToggleDone(e.target.checked)}
+            className="w-[17px] h-[17px] accent-accent cursor-pointer"
+          />
+        </span>
+        <span
+          className={`text-ink-soft text-xs shrink-0 transition-transform duration-150 ${expanded ? "rotate-180" : ""}`}
+          aria-hidden
+        >
+          ▾
+        </span>
+      </button>
+
+      {expanded && (
+        <div className="px-5 pb-4 pl-[calc(1.5rem+0.75rem)] flex flex-col gap-3.5">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`text-[0.66rem] uppercase tracking-wide font-semibold ${skillTextClass(week.skill)}`}>
+                {SKILL_LABELS[week.skill] ?? week.skill}
+              </span>
+              <span className="text-[0.66rem] uppercase tracking-wide text-ink-soft">· {week.hours}</span>
+            </div>
+            <div className="text-[0.66rem] uppercase tracking-wide text-ink-soft font-semibold mb-1">Plan de la semana</div>
+            <p className="text-sm text-ink">{week.focus}</p>
+          </div>
+          <div>
+            <div className="text-[0.66rem] uppercase tracking-wide text-ink-soft font-semibold mb-1.5">Recursos a usar</div>
+            <ul className="list-disc pl-4 space-y-1 text-sm text-ink-soft">
+              {items.map((item, i) => (
+                <li key={i}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
