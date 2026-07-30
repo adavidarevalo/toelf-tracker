@@ -54,7 +54,7 @@ export function TopBar() {
           </div>
         </div>
 
-        <div className="flex gap-2 flex-wrap items-center">
+        <div className="flex gap-2 flex-wrap items-center w-full justify-end">
           {syncStatus === "local-only" && (
             <span
               className="text-[0.68rem] text-speaking border border-speaking/40 rounded-full px-2.5 py-1"
